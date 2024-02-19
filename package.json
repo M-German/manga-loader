@@ -1,0 +1,22 @@
+{
+  "name": "manga",
+  "version": "1.0.0",
+  "description": "govno",
+  "main": "manga.js",
+  "type": "module",
+  "scripts": {
+    "start": "node manga.js",
+    "test": "test"
+  },
+  "keywords": [
+    "anime",
+    "manga",
+    "govno"
+  ],
+  "author": "mge",
+  "license": "ISC",
+  "dependencies": {
+    "log-update": "^6.0.0",
+    "puppeteer": "^22.1.0"
+  }
+}
