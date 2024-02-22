@@ -160,7 +160,7 @@ const saveData = (data) => {
                 trialButton.click();
             }
             else {
-                throw "Кнопка триала не найдена, увы."
+                throw "Кнопка триала не найдена, увы. Попробуйте удалить data.json и ввести новый токен."
             }
         }
     
