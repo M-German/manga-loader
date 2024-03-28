@@ -104,8 +104,8 @@ const saveData = (data) => {
 }
 
 const pageContainsText = async (page, text) => {
-    let html = await page.evaluate(() => document.body.innerHTML);
-    return html?.search(text) > -1;
+    let bodyText = await page.evaluate(() => document.body.textContent);
+    return bodyText?.includes(text);
 }
 
 (async () => {
