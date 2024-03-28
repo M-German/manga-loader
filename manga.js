@@ -126,7 +126,7 @@ const pageContainsText = async (page, text) => {
         console.log('Загрузка данных...');
         const data = await loadData();
         const needLogin = await pageContainsText(page, 'Sign in');
-
+        
         if(needLogin) {
             let cookies = Array.isArray(data.cookies) ? data.cookies : [];
 
@@ -161,7 +161,8 @@ const pageContainsText = async (page, text) => {
             // Клик по кнопке подтверждения триала
             let trialButton = await page.$('._1qwazup7._1qwazup5 > ._1qwazup8');
             if(trialButton) {
-                trialButton.click();
+                await trialButton.click();
+                await page.waitForNetworkIdle({ idleTime: 500, concurrency: 2 });
             }
             else {
                 let isSubscribeClause = pageContainsText(page, 'Subscribe now');
@@ -174,8 +175,7 @@ const pageContainsText = async (page, text) => {
             }
             
         }
-    
-        // await page.waitForNetworkIdle({ idleTime: 500, concurrency: 2 });
+
         await downloadMangaPages(page, seriesName, episodeName);
         browser.close();
         console.log("Готово!");
