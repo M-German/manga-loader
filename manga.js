@@ -32,57 +32,53 @@ const scrollToItem = (elementHandle) => {
     })
 }
 
-const downloadMangaPages = (page, seriesName, episodeName) => {
-    return new Promise(async (resolve, reject) => {
-        try {
-            let imgUrls = [];
-    
-            // Прокрутка для изначальной прогрузки изображений
-            await page.evaluate(() => document.scrollingElement.scrollBy(0, 1000));
-    
-            // Все контейнеры под изображения
-            const imgContainers = await page.$$('._91qwou3');
-            const itemsTotal = imgContainers.length;
-    
-            // Количество контейнеров, содержащих в данный момент внутри себя тег img
-            const itemsOnPage = (await page.$$('._91qwou3 > img')).length;
-            
-            let count = 0;
-            let downloads = [];
-            for(let index = 0; index < itemsTotal; index++) {
-                let url = await imgContainers[index].$eval('img', el => el.src);
-                downloads.push(
-                    downloadFile(url, ['downloads', seriesName, episodeName], `${index}.jpg`)
-                );
-                imgUrls.push(url);
-                logUpdate(`Загрузка (${index+1}/${itemsTotal})`)
-    
-                count++;
-                if(count >= itemsOnPage) {
-                    count = 0;
-                    let nextContainerIndex = -1;
-                    if(index+2 < imgContainers.length) nextContainerIndex = index+2;
-                    else if(index+1 < imgContainers.length) nextContainerIndex = index+1;
-    
-                    if(nextContainerIndex > -1) {
-                        await scrollToItem(imgContainers[nextContainerIndex]);
-                    }
-                }
-                
-            }
-            // console.log(imgUrls);
+const downloadMangaPages = async (page, seriesName, episodeName) => {
+    let imgUrls = [];
+    console.log('this')
+    console.log('that')
+    try {
+        // Прокрутка для изначальной прогрузки изображений
+        await page.evaluate(() => document.scrollingElement.scrollBy(0, 1000));
 
-            Promise.all(downloads)
-            .then(() => resolve(imgUrls))
-            .catch(err => {
-                // console.error('Ошибка при загрузке изображения');
-                throw err;
-            })
+        // Все контейнеры под изображения
+        const imgContainers = await page.$$('._91qwou3');
+        const itemsTotal = imgContainers.length;
+
+        // Количество контейнеров, содержащих в данный момент внутри себя тег img
+        const itemsOnPage = (await page.$$('._91qwou3 > img')).length;
+        
+        let count = 0;
+        let downloads = [];
+        console.log('this')
+        for(let index = 0; index < itemsTotal; index++) {
+            let url = await imgContainers[index].$eval('img', el => el.src);
+            downloads.push(
+                downloadFile(url, ['downloads', seriesName, episodeName], `${index}.jpg`)
+            );
+            imgUrls.push(url);
+            logUpdate(`Загрузка (${index+1}/${itemsTotal})`);
+
+            count++;
+            if(count >= itemsOnPage) {
+                count = 0;
+                let nextContainerIndex = -1;
+                if(index+2 < imgContainers.length) nextContainerIndex = index+2;
+                else if(index+1 < imgContainers.length) nextContainerIndex = index+1;
+
+                if(nextContainerIndex > -1) {
+                    await scrollToItem(imgContainers[nextContainerIndex]);
+                }
+            }
+            
         }
-        catch(err) {
-            reject(err);
-        }
-    })
+
+        await Promise.allSettled(downloads);
+
+        return { urls: imgUrls };
+    }
+    catch(err) {
+        return { urls: imgUrls, error: err };
+    }
 }
 
 const loadData = () => {
@@ -104,12 +100,18 @@ const saveData = (data) => {
     return writeFile('./data.json', dataJson);
 }
 
+const pageContainsText = async (page, text) => {
+    let html = await page.evaluate(() => document.body.innerHTML);
+    return html?.search(text) > -1;
+}
+
 (async () => {
-    console.log('Запуск браузера...\n');
-    const browser = await launch({ headless: true });
+    console.log('Запуск браузера...');
+    const browser = await launch({ headless: false });
     try {
         const args = process.argv.slice(2);
-        const url = args[0];
+        // const url = args[0];
+        const url = "https://manta.net/en/series/finding-camellia/episodes/spin-off-episode-1?episodeId=16549"
         if(!url) throw "No url";
 
         const page = await browser.newPage();
@@ -119,9 +121,9 @@ const saveData = (data) => {
         let seriesName = url.match(/(?<=(series\/)).+(?=\/(epi))/)[0];
         let episodeName = url.match(/(?<=(episodes\/))[^\?]+/)[0];
 
-        console.log('Загрузка данных...\n');
+        console.log('Загрузка данных...');
         const data = await loadData();
-        const needLogin = await page.evaluate(() => document.body.innerHTML.search('Sign in') > -1);
+        const needLogin = await pageContainsText(page, 'Sign in');
 
         if(needLogin) {
             let cookies = Array.isArray(data.cookies) ? data.cookies : [];
@@ -160,18 +162,31 @@ const saveData = (data) => {
                 trialButton.click();
             }
             else {
-                throw "Кнопка триала не найдена, увы. Попробуйте удалить data.json и ввести новый токен."
+                let isSubscribeClause = pageContainsText(page, 'Subscribe now');
+                if(isSubscribeClause) {
+                    await page.reload();
+                }
+                else {
+                    throw "Кнопка триала не найдена, увы. Попробуйте удалить data.json и ввести новый токен."
+                }
             }
+            
         }
     
         await page.waitForNetworkIdle({ idleTime: 500, concurrency: 2 });
-        await downloadMangaPages(page, seriesName, episodeName);
+        let { urls, error } = await downloadMangaPages(page, seriesName, episodeName);
+        if(error) {
+            console.error(error);
+            console.log("Ошибка загрузки.\nURLs:");
+            console.log(urls);
+        }
         browser.close();
         console.log("Готово!");
     }
     catch(err) {
         browser.close();
-        console.log(err);
+        if(err?.data) console.log(err?.data);
+        console.log(err?.error || err);
         console.log("Что-то пошло не так");
     }
     

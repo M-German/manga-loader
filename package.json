@@ -8,11 +8,6 @@
     "start": "node manga.js",
     "test": "test"
   },
-  "keywords": [
-    "anime",
-    "manga",
-    "govno"
-  ],
   "author": "mge",
   "license": "ISC",
   "dependencies": {
