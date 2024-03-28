@@ -9,8 +9,8 @@ import * as readline from 'node:readline/promises';
 import { stdin as input, stdout as output } from 'node:process';
 
 
-const downloadFile = async (url, downloadPath=['downloads'], fileName) => {
-    let path = downloadPath.join('/');
+const downloadFile = async (url, path='downloads', fileName) => {
+    let downloadPath = path.split('/');
     if (!existsSync(path)) {
         let partialPath = ""
         for(let i=0; i < downloadPath.length; i++) {
@@ -34,9 +34,13 @@ const scrollToItem = (elementHandle) => {
 
 const downloadMangaPages = async (page, seriesName, episodeName) => {
     let imgUrls = [];
-    console.log('this')
-    console.log('that')
     try {
+        let downloadPath = `downloads/${seriesName}/${episodeName}`;
+
+        if (existsSync(downloadPath)) {
+            throw `Папка '${downloadPath}' уже существует`;
+        }
+
         // Прокрутка для изначальной прогрузки изображений
         await page.evaluate(() => document.scrollingElement.scrollBy(0, 1000));
 
@@ -49,11 +53,10 @@ const downloadMangaPages = async (page, seriesName, episodeName) => {
         
         let count = 0;
         let downloads = [];
-        console.log('this')
         for(let index = 0; index < itemsTotal; index++) {
             let url = await imgContainers[index].$eval('img', el => el.src);
             downloads.push(
-                downloadFile(url, ['downloads', seriesName, episodeName], `${index}.jpg`)
+                downloadFile(url, downloadPath, `${index}.jpg`)
             );
             imgUrls.push(url);
             logUpdate(`Загрузка (${index+1}/${itemsTotal})`);
@@ -77,7 +80,7 @@ const downloadMangaPages = async (page, seriesName, episodeName) => {
         return { urls: imgUrls };
     }
     catch(err) {
-        return { urls: imgUrls, error: err };
+        throw { urls: imgUrls, error: err };
     }
 }
 
@@ -107,11 +110,10 @@ const pageContainsText = async (page, text) => {
 
 (async () => {
     console.log('Запуск браузера...');
-    const browser = await launch({ headless: false });
+    const browser = await launch({ headless: true });
     try {
         const args = process.argv.slice(2);
-        // const url = args[0];
-        const url = "https://manta.net/en/series/finding-camellia/episodes/spin-off-episode-1?episodeId=16549"
+        const url = args[0];
         if(!url) throw "No url";
 
         const page = await browser.newPage();
@@ -164,7 +166,7 @@ const pageContainsText = async (page, text) => {
             else {
                 let isSubscribeClause = pageContainsText(page, 'Subscribe now');
                 if(isSubscribeClause) {
-                    await page.reload();
+                    await page.reload({ waitUntil: 'networkidle2' });
                 }
                 else {
                     throw "Кнопка триала не найдена, увы. Попробуйте удалить data.json и ввести новый токен."
@@ -173,21 +175,19 @@ const pageContainsText = async (page, text) => {
             
         }
     
-        await page.waitForNetworkIdle({ idleTime: 500, concurrency: 2 });
-        let { urls, error } = await downloadMangaPages(page, seriesName, episodeName);
-        if(error) {
-            console.error(error);
-            console.log("Ошибка загрузки.\nURLs:");
-            console.log(urls);
-        }
+        // await page.waitForNetworkIdle({ idleTime: 500, concurrency: 2 });
+        await downloadMangaPages(page, seriesName, episodeName);
         browser.close();
         console.log("Готово!");
     }
     catch(err) {
+        console.error("Что-то пошло не так");
         browser.close();
-        if(err?.data) console.log(err?.data);
-        console.log(err?.error || err);
-        console.log("Что-то пошло не так");
+        if(err?.error) {
+            console.error(err.error);
+            if(err.urls?.length) console.log("URLs:\n", err.urls);
+        }
+        else console.error(err);
     }
     
 })();
